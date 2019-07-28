@@ -73,8 +73,9 @@ End     | 0x00000000  |
 
 
     def _read_header(self):
+        self.fd.seek(0)
         buf = self.fd.read(4*INTSIZE)
-        magic, rs, idxoffs, fstfree = struct.unpack(buf, HEADERFORMAT)
+        magic, rs, idxoffs, fstfree = struct.unpack(HEADERFORMAT, buf)
         if magic != MAGIC_NUMBER:
             raise IndexedFileError("'{}' Bad magic number."
                                     .format(self.name))
@@ -96,7 +97,7 @@ End     | 0x00000000  |
 
     def open(self):
         self.fd = self.path.open("r+b")
-        self.read_header()
+        self._read_header()
         self._read_index()
 
 
@@ -148,7 +149,7 @@ End     | 0x00000000  |
         self.fd.seek(self.index_offset)
         keysize = self._readint()
         while keysize:
-            key = self.read(keysize)
+            key = self.fd.read(keysize)
             idx = self._readint()
             datasize = self._readint()
             self.index[key] = (idx, datasize)
@@ -159,16 +160,8 @@ End     | 0x00000000  |
         self.fd.seek(self.index_offset)
         for key in self.index:
             idx, size = self.index[key]
-            if isinstance(key, str):
-                keybuf = key.encode()
-            elif isinstance(key, bytes):
-                keybuf = key
-            else:
-                raise IndexedFileError("'{}' cannot handle keys of type"
-                            " '{}' ({}). Must be str or bytes."
-                            .format(self.name, type(key), key))
-            self._writeint(len(keybuf))
-            self.fd.write(keybuf)
+            self._writeint(len(key))
+            self.fd.write(key)
             self._writeint(idx)
             self._writeint(size)
         self._writeint(0)
@@ -199,7 +192,20 @@ End     | 0x00000000  |
         return indices
 
 
+    def to_bytes(self, key):
+        if isinstance(key, str):
+            keybytes = key.encode()
+        elif isinstance(key, bytes):
+            keybytes = key
+        else:
+            raise IndexedFileError("'{}' cannot handle keys of type"
+                        " '{}' ({}). Must be str or bytes."
+                        .format(self.name, type(key), key))
+        return keybytes
+
     def __setitem__(self, key, bytesval):
+        import pdb; pdb.set_trace()
+        keybytes = self.to_bytes(key)
         datasize = len(bytesval)
         usable_rec_size = self.recordsize - INTSIZE
         records_needed = datasize // usable_rec_size + 1
@@ -212,5 +218,30 @@ End     | 0x00000000  |
             self.fd.write(bytesval[start:start+usable_rec_size])
             start += usable_rec_size
 
-        self.index[key] = (first_record, datasize)
+        self.index[keybytes] = (first_record, datasize)
         self._write_index()
+
+
+    def _retrieve(self, start):
+        """
+        Retrieve the data of the records from start until a record
+        marked with NO_MORE_RECORDS
+        """
+        usable_rec_size = self.recordsize - INTSIZE
+
+        idx = start
+        while idx != NO_MORE_RECORDS:
+            self.fd.seek(self.record_number(idx))
+            idx = self._readint()
+            yield self.fd.read(usable_rec_size)
+
+
+    def __getitem__(self, key):
+        keybytes = self.to_bytes(key)
+        usable_rec_size = self.recordsize - INTSIZE
+        first_record, datasize = self.index[keybytes]
+        buf = b""
+        for chunk in self._retrieve(first_record):
+            buf += chunk
+
+        return buf[:datasize]
