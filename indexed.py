@@ -204,7 +204,6 @@ End     | 0x00000000  |
         return keybytes
 
     def __setitem__(self, key, bytesval):
-        import pdb; pdb.set_trace()
         keybytes = self.to_bytes(key)
         datasize = len(bytesval)
         usable_rec_size = self.recordsize - INTSIZE
@@ -245,3 +244,49 @@ End     | 0x00000000  |
             buf += chunk
 
         return buf[:datasize]
+
+
+    def _resize(self):
+        pass
+
+    def __delitem__(self, key):
+        pass
+
+    def __contains__(self, key):
+        keybytes = self.to_bytes(key)
+        return keybytes in self.index
+
+    def gen_keys(self):
+        for k in self.index.keys():
+            yield k
+
+    def __iter__(self):
+        class IDXFileIter:
+            def __init__(self2):
+                self2.gkeys = self.gen_keys()
+            def __next__(self2):
+                return next(self2.gkeys)
+        return IDXFileIter()
+
+    def keys(self):
+        return self.index.keys()
+
+    def values(self):
+        class IDXFileVals:
+            def __iter__(self2):
+                self2.gkeys = self.gen_keys()
+                return self2
+            def __next__(self2):
+                k = next(self2.gkeys)
+                return self[k]
+        return IDXFileVals()
+
+    def items(self):
+        class IDXFileItems:
+            def __iter__(self2):
+                self2.gkeys = self.gen_keys()
+                return self2
+            def __next__(self2):
+                k = next(self2.gkeys)
+                return k, self[k]
+        return IDXFileItems()
