@@ -93,6 +93,7 @@ End     | 0x00000000  |
                     self.first_free)
         self.fd.seek(0)
         self.fd.write(buf)
+        self.fd.flush()
 
 
     def open(self):
@@ -235,6 +236,19 @@ End     | 0x00000000  |
             yield self.fd.read(usable_rec_size)
 
 
+    def _record_list(self, start):
+        """
+        Return the record chain from start until NO_MORE_RECORDS
+        """
+        idx = start
+        while True:
+            yield idx
+            self.fd.seek(self.record_number(idx))
+            idx = self._readint()
+            if idx == NO_MORE_RECORDS:
+                break
+
+
     def __getitem__(self, key):
         keybytes = self.to_bytes(key)
         usable_rec_size = self.recordsize - INTSIZE
@@ -247,10 +261,20 @@ End     | 0x00000000  |
 
 
     def _resize(self):
-        pass
+        num_records = self.current_size // self.recordsize
 
     def __delitem__(self, key):
-        pass
+        keybytes = self.to_bytes(key)
+        first_record, datasize = self.index[keybytes]
+        del self.index[keybytes]
+        self._write_index()
+        for idx in self._record_list(first_record):
+            pass  # just advance to the last record in the chain
+        self.fd.seek(self.record_number(idx))
+        self._writeint(self.first_free)
+        self.first_free = first_record
+        self._write_header()
+
 
     def __contains__(self, key):
         keybytes = self.to_bytes(key)
