@@ -82,7 +82,7 @@ End     | 0x00000000  |
         self.recordsize = rs
         self.index_offset = idxoffs
         self.first_free = fstfree
-        self.current_size = self.index_offset - 8 * INTSIZE
+        self.current_size = self.index_offset - 4 * INTSIZE
 
 
     def _write_header(self):
