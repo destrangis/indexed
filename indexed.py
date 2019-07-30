@@ -64,7 +64,7 @@ End     | 0x00000000  |
         elif recordsize:
             self.recordsize = max(recordsize, 2 * INTSIZE)
             self.current_size = num_recs_hint*recordsize
-            self.index_offset = self.current_size + 4 * INTSIZE
+            self.index_offset = self.current_size + RECORDS_OFFSET
             self.first_free = 0
             self.create()
         else:
@@ -82,7 +82,7 @@ End     | 0x00000000  |
         self.recordsize = rs
         self.index_offset = idxoffs
         self.first_free = fstfree
-        self.current_size = self.index_offset - 4 * INTSIZE
+        self.current_size = self.index_offset - RECORDS_OFFSET
 
 
     def _write_header(self):
@@ -174,15 +174,18 @@ End     | 0x00000000  |
 
 
     def allocate(self, numrecords):
-        n = 1
-        indices = [ self.first_free ]
-        last = self.first_free
-        while n < numrecords:
-            self.fd.seek(self.record_number(last))
-            last = self._readint()
-            indices.append(last)
+        n = 0
+        indices = []
+        recnum = self.first_free
+        while n < numrecords and recnum != NO_MORE_RECORDS:
+            indices.append(recnum)
             n += 1
+            self.fd.seek(self.record_number(recnum))
+            recnum = self._readint()
 
+        if n < numrecords:
+            raise IndexedFileError("Out of space")
+        last = indices[-1]
         self.fd.seek(self.record_number(last))
         new_first_free = self._readint()
         self.fd.seek(self.record_number(last))
@@ -211,7 +214,17 @@ End     | 0x00000000  |
         records_needed = datasize // usable_rec_size + 1
         start = 0
         first_record = 0
-        for idx in self.allocate(records_needed):
+
+        free_list = []
+        while not free_list:
+            try:
+                free_list = self.allocate(records_needed)
+            except IndexedFileError as err:
+                print("Resizing...")
+                self._resize()
+                free_list = []
+
+        for idx in free_list:
             if start == 0:
                 first_record = idx
             self.fd.seek(self.record_number(idx)+INTSIZE)
@@ -248,6 +261,15 @@ End     | 0x00000000  |
             if idx == NO_MORE_RECORDS:
                 break
 
+    def last_in_chain(self, start):
+        """
+        Return the last record in a chain starting by start.
+        The next_record field in its index should be NO_MORE_RECORDS
+        """
+        for idx in self._record_list(start):
+            pass
+        return idx
+
 
     def __getitem__(self, key):
         keybytes = self.to_bytes(key)
@@ -262,14 +284,31 @@ End     | 0x00000000  |
 
     def _resize(self):
         num_records = self.current_size // self.recordsize
+        new_size = 2 * self.current_size
+        new_index_offset = new_size + RECORDS_OFFSET
+        self.index_offset = new_index_offset
+        self.fd.truncate(self.index_offset)
+        self.current_size = new_size
+        first_new_record = num_records
+        self.init_free_list(first_new_record)
+
+        if self.first_free != NO_MORE_RECORDS:
+            # not completely full, add new records to existing free space
+            idx = self.last_in_chain(self.first_free)
+            self.fd.seek(self.record_number(idx))
+            self._writeint(first_new_record)
+        else:
+            self.first_free = first_new_record
+        self._write_index()
+        self._write_header()
+
 
     def __delitem__(self, key):
         keybytes = self.to_bytes(key)
         first_record, datasize = self.index[keybytes]
         del self.index[keybytes]
         self._write_index()
-        for idx in self._record_list(first_record):
-            pass  # just advance to the last record in the chain
+        idx = self.last_in_chain(first_record)
         self.fd.seek(self.record_number(idx))
         self._writeint(self.first_free)
         self.first_free = first_record
