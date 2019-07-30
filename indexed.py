@@ -173,7 +173,7 @@ End     | 0x00000000  |
         self.fd.close()
 
 
-    def allocate(self, numrecords):
+    def _allocate_records(self, numrecords):
         n = 0
         indices = []
         recnum = self.first_free
@@ -185,6 +185,7 @@ End     | 0x00000000  |
 
         if n < numrecords:
             raise IndexedFileError("Out of space")
+
         last = indices[-1]
         self.fd.seek(self.record_number(last))
         new_first_free = self._readint()
@@ -194,6 +195,23 @@ End     | 0x00000000  |
 
         self._write_header()
         return indices
+
+    def allocate(self, numrecords):
+        """
+        Return a list of free records, resizing the file if not enough
+        free records are available.
+        """
+        free_list = []
+        while not free_list:
+            try:
+                free_list = self._allocate_records(numrecords)
+            except IndexedFileError as err:
+                if str(err) == "Out of space":
+                    self._resize()
+                else:
+                    raise
+
+        return free_list
 
 
     def to_bytes(self, key):
@@ -212,25 +230,15 @@ End     | 0x00000000  |
         datasize = len(bytesval)
         usable_rec_size = self.recordsize - INTSIZE
         records_needed = datasize // usable_rec_size + 1
+
         start = 0
-        first_record = 0
-
-        free_list = []
-        while not free_list:
-            try:
-                free_list = self.allocate(records_needed)
-            except IndexedFileError as err:
-                print("Resizing...")
-                self._resize()
-                free_list = []
-
+        free_list = self.allocate(records_needed)
         for idx in free_list:
-            if start == 0:
-                first_record = idx
             self.fd.seek(self.record_number(idx)+INTSIZE)
             self.fd.write(bytesval[start:start+usable_rec_size])
             start += usable_rec_size
 
+        first_record = free_list[0]
         self.index[keybytes] = (first_record, datasize)
         self._write_index()
 
