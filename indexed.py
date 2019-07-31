@@ -226,6 +226,9 @@ End     | 0x00000000  |
         return keybytes
 
     def __setitem__(self, key, bytesval):
+        if key in self:
+            del self[key]
+
         keybytes = self.to_bytes(key)
         datasize = len(bytesval)
         usable_rec_size = self.recordsize - INTSIZE
