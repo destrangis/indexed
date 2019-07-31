@@ -21,6 +21,7 @@ INTSIZE = 4
 INTBINFORMAT, HEADERFORMAT, MAGIC_NUMBER = _fmt_table[INTSIZE]
 NO_MORE_RECORDS = _all_1s(INTSIZE)
 DEFAULT_RECORD_SIZE = 512
+DEFAULT_NUM_RECORDS = 10
 RECORDS_OFFSET = 4 * INTSIZE    # start of records area
 
 class IndexedFileError(Exception):
@@ -55,21 +56,25 @@ End     | 0x00000000  |
     """
 
 
-    def __init__(self, name, recordsize=0, num_recs_hint=100):
+    def __init__(self, name, mode='r',
+                        recordsize=DEFAULT_RECORD_SIZE,
+                        num_recs_hint=DEFAULT_NUM_RECORDS):
+        if mode not in "rc":
+            raise IndexedFileError("'{}' Mode must be 'r' or 'c'")
         self.name = name
         self.path = pathlib.Path(name)
         self.index = {}
-        if self.path.is_file():
-            self.open()
-        elif recordsize:
+        if mode == "r":
+            if self.path.is_file():
+                self.open()
+            else:
+                raise IndexedFileError("'{}' Not found.")
+        elif mode == "c":
             self.recordsize = max(recordsize, 2 * INTSIZE)
             self.current_size = num_recs_hint*recordsize
             self.index_offset = self.current_size + RECORDS_OFFSET
             self.first_free = 0
             self.create()
-        else:
-            raise IndexedFileError("'{}' Need recordsize for object "
-                                "creation.".format(self.name))
 
 
     def _read_header(self):
@@ -207,7 +212,7 @@ End     | 0x00000000  |
                 free_list = self._allocate_records(numrecords)
             except IndexedFileError as err:
                 if str(err) == "Out of space":
-                    self._resize()
+                    self.resize()
                 else:
                     raise
 
@@ -246,7 +251,7 @@ End     | 0x00000000  |
         self._write_index()
 
 
-    def _retrieve(self, start):
+    def retrieve(self, start):
         """
         Retrieve the data of the records from start until a record
         marked with NO_MORE_RECORDS
@@ -260,7 +265,7 @@ End     | 0x00000000  |
             yield self.fd.read(usable_rec_size)
 
 
-    def _record_list(self, start):
+    def record_list(self, start):
         """
         Return the record chain from start until NO_MORE_RECORDS
         """
@@ -277,7 +282,7 @@ End     | 0x00000000  |
         Return the last record in a chain starting by start.
         The next_record field in its index should be NO_MORE_RECORDS
         """
-        for idx in self._record_list(start):
+        for idx in self.record_list(start):
             pass
         return idx
 
@@ -287,13 +292,13 @@ End     | 0x00000000  |
         usable_rec_size = self.recordsize - INTSIZE
         first_record, datasize = self.index[keybytes]
         buf = b""
-        for chunk in self._retrieve(first_record):
+        for chunk in self.retrieve(first_record):
             buf += chunk
 
         return buf[:datasize]
 
 
-    def _resize(self):
+    def resize(self):
         num_records = self.current_size // self.recordsize
         new_size = 2 * self.current_size
         new_index_offset = new_size + RECORDS_OFFSET
@@ -364,3 +369,9 @@ End     | 0x00000000  |
                 k = next(self2.gkeys)
                 return k, self[k]
         return IDXFileItems()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
