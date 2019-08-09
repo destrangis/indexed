@@ -4,23 +4,11 @@ import pathlib
 import pickle
 from numbers import Number
 
-_fmt_table = {
-# intsize  fmt1   fmt4     MAGIC
-    2:    ("!H", "!HHHH", 0xd8fd),
-    4:    ("!L", "!LLLL", 0xd8fd2372),
-    8:    ("!Q", "!QQQQ", 0xd8fd23720dc4b9f4),
-    }
-
-def _all_1s(size):
-    "Return size bytes set to all 1"
-    v = 0
-    for i in range(size):
-        v = (v << 8) | 0xff
-    return v
-
 INTSIZE = 4
-INTBINFORMAT, HEADERFORMAT, MAGIC_NUMBER = _fmt_table[INTSIZE]
-NO_MORE_RECORDS = _all_1s(INTSIZE)
+INTBINFORMAT = "!L"
+HEADERFORMAT = "!LLLL"
+MAGIC_NUMBER = 0xd8fd2372
+NO_MORE_RECORDS = 0xffffffff
 DEFAULT_RECORD_SIZE = 512
 DEFAULT_NUM_RECORDS = 10
 RECORDS_OFFSET = 4 * INTSIZE    # start of records area
