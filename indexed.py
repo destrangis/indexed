@@ -1,6 +1,7 @@
 import sys
 import struct
 import pathlib
+import pickle
 from numbers import Number
 
 _fmt_table = {
@@ -155,7 +156,8 @@ End     | 0x00000000  |
         self.fd.seek(self.index_offset)
         keysize = self._readint()
         while keysize:
-            key = self.fd.read(keysize)
+            keybytes = self.fd.read(keysize)
+            key = pickle.loads(keybytes)
             idx = self._readint()
             datasize = self._readint()
             self.index[key] = (idx, datasize)
@@ -166,8 +168,9 @@ End     | 0x00000000  |
         self.fd.seek(self.index_offset)
         for key in self.index:
             idx, size = self.index[key]
-            self._writeint(len(key))
-            self.fd.write(key)
+            keybytes = pickle.dumps(key)
+            self._writeint(len(keybytes))
+            self.fd.write(keybytes)
             self._writeint(idx)
             self._writeint(size)
         self._writeint(0)
@@ -218,23 +221,10 @@ End     | 0x00000000  |
 
         return free_list
 
-
-    def to_bytes(self, key):
-        if isinstance(key, str):
-            keybytes = key.encode()
-        elif isinstance(key, bytes):
-            keybytes = key
-        else:
-            raise IndexedFileError("'{}' cannot handle keys of type"
-                        " '{}' ({}). Must be str or bytes."
-                        .format(self.name, type(key), key))
-        return keybytes
-
     def __setitem__(self, key, bytesval):
         if key in self:
             del self[key]
 
-        keybytes = self.to_bytes(key)
         datasize = len(bytesval)
         usable_rec_size = self.recordsize - INTSIZE
         records_needed = datasize // usable_rec_size + 1
@@ -247,7 +237,7 @@ End     | 0x00000000  |
             start += usable_rec_size
 
         first_record = free_list[0]
-        self.index[keybytes] = (first_record, datasize)
+        self.index[key] = (first_record, datasize)
         self._write_index()
 
 
@@ -288,9 +278,8 @@ End     | 0x00000000  |
 
 
     def __getitem__(self, key):
-        keybytes = self.to_bytes(key)
         usable_rec_size = self.recordsize - INTSIZE
-        first_record, datasize = self.index[keybytes]
+        first_record, datasize = self.index[key]
         buf = b""
         for chunk in self.retrieve(first_record):
             buf += chunk
@@ -320,9 +309,8 @@ End     | 0x00000000  |
 
 
     def __delitem__(self, key):
-        keybytes = self.to_bytes(key)
-        first_record, datasize = self.index[keybytes]
-        del self.index[keybytes]
+        first_record, datasize = self.index[key]
+        del self.index[key]
         self._write_index()
         idx = self.last_in_chain(first_record)
         self.fd.seek(self.record_number(idx))
@@ -332,8 +320,7 @@ End     | 0x00000000  |
 
 
     def __contains__(self, key):
-        keybytes = self.to_bytes(key)
-        return keybytes in self.index
+        return key in self.index
 
     def gen_keys(self):
         for k in self.index.keys():
