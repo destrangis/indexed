@@ -11,19 +11,19 @@ from indexed import IndexedFile
 db = IndexedFile("database.db", "c")
 ~~~
 
-Store some data. Keys must be hashable objects, and the content can only be string or bytes:
+Store some data. Keys must be hashable objects, and the content can only be bytes:
 
 ~~~python
-db[("IDENT", 405)] = "this is info to be stored"
+db[("IDENT", 405)] = b"this is info to be stored"
 db[35] = json.dumps({ "name": "Phil", 
                       "address": "35, Barnacle st.", 
-                      "date_of_birth": "1982/11/24"})
+                      "date_of_birth": "1982/11/24"}).encode()
 ~~~
 
 Retrieve data:
 
 ~~~python
-print(db[("IDENT", 405)])  # prints "this is info to be stored"
+print(db[("IDENT", 405)])  # prints b'this is info to be stored'
 ~~~
 
 Bad keys throw `KeyError` exception:
