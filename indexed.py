@@ -4,6 +4,8 @@ import pathlib
 import pickle
 from numbers import Number
 
+VERSION = "1.0.0"
+
 INTSIZE = 4
 INTBINFORMAT = "!L"
 HEADERFORMAT = "!LLLL"
