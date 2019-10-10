@@ -54,6 +54,7 @@ with IndexedFile("database.db", "r") as db:
 
 #### Reference
 **IndexedFile(name, mode='r', recordsize=DEFAULT_RECORD_SIZE, num_recs_hint=DEFAULT_NUM_RECORDS)**
+
 Create a new IndexedFile object, where `name` is the filename to store it to, `mode` is either 'c' which creates or resets a new file, or 'r' which opens an existing file.
 
 `recordsize` is the size of each record. Data items can be bigger than the recordsize, in which case a suitable number of records will be allocated to contain the object.
@@ -63,16 +64,20 @@ Create a new IndexedFile object, where `name` is the filename to store it to, `m
 recordsize and num_recs_hint, if specified, are ignored on `mode` 'r'.
 
 **IndexedFile.close()**
+
 Closes access to the IndexedFile. The file cannot be re-opened. In order to access the file after `.close()` a new instance should be created with `mode` 'r'
 
 **IndexedFile.keys()**
+
 Returns an iterable that gives the keys in sequence
 
 **IndexedFile.values()**
+
 Returns an iterable that gives the values in sequence
 
 **IndexedFile.items()**
+
 Returns and iterable that gives tuples of the form _(key, value)_
 
-####License
+#### License
 This software is released under the **MIT License**
