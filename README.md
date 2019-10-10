@@ -1,8 +1,8 @@
-###IndexedFile
+### IndexedFile
 
 This is a simple implementation of Indexed files similar, but not identical, to dbm/gdbm/ndbm.
 
-####Usage
+#### Usage
 Instantiation:
 
 ~~~python
@@ -52,7 +52,7 @@ with IndexedFile("database.db", "r") as db:
 	print(db[35])
 ~~~
 
-####Reference
+#### Reference
 **IndexedFile(name, mode='r', recordsize=DEFAULT_RECORD_SIZE, num_recs_hint=DEFAULT_NUM_RECORDS)**
 Create a new IndexedFile object, where `name` is the filename to store it to, `mode` is either 'c' which creates or resets a new file, or 'r' which opens an existing file.
 
